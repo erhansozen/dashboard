@@ -1,49 +1,49 @@
 import streamlit as st
-import pandas as pd
-import datetime
-import random
+import sqlite3
 
-# 🎯 Başlık
-st.title("📊 Kişisel Dashboard")
+# 📌 SQLite Veritabanı Bağlantısı
+conn = sqlite3.connect("tasks.db", check_same_thread=False)
+cursor = conn.cursor()
 
-# 📅 Günlük Tarih ve Saat
-st.write(f"Tarih: {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}")
+# 📌 Eğer tablo yoksa oluştur
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT,
+        task TEXT
+    )
+""")
+conn.commit()
 
-# ✅ **Yapılacaklar Listesi**
-st.subheader("✅ Yapılacaklar Listesi")
-tasks = st.text_area("Bugün neler yapacaksın?", placeholder="Örn: Kod yaz, kitap oku, spora git...")
-st.write("📝 Bugünün Planı:")
-st.write(tasks)
+# 📌 Kullanıcı Seçimi
+st.sidebar.title("👥 Kullanıcı Seç")
+users = ["Ali", "Ayşe", "Mehmet", "Ortak"]  # Kullanıcı listesi
+selected_user = st.sidebar.selectbox("Lütfen bir kullanıcı seç:", users)
 
-# 📌 **Hedeflerini Kaydet**
-st.subheader("🎯 Hedefler")
-goal = st.text_input("Bu hafta başarmak istediğin bir hedef nedir?", placeholder="Örn: 5 saat Python çalış")
-if goal:
-    st.success(f"Harika! Bu hafta '{goal}' hedefine ulaşmak için çalışacaksın!")
+if selected_user:
+    st.title(f"📌 {selected_user} için Görev Listesi")
 
-# 📊 **Veri Tablosu (Örnek İlerleme Verisi)**
-st.subheader("📈 Günlük Çalışma Saati Takibi")
+    # 📌 Kullanıcıya Ait Görevleri Getir
+    cursor.execute("SELECT id, task FROM tasks WHERE user=?", (selected_user,))
+    tasks = cursor.fetchall()
 
-data = {
-    "Tarih": pd.date_range(start="2025-02-01", periods=7, freq="D"),
-    "Çalışma Saati": [random.randint(1, 8) for _ in range(7)]
-}
-df = pd.DataFrame(data)
+    # 📌 Görevleri Listele
+    st.subheader("✅ Senin Görevlerin")
+    if tasks:
+        for task_id, task in tasks:
+            col1, col2 = st.columns([0.8, 0.2])
+            col1.write(f"✔️ {task}")
+            if col2.button("❌", key=f"delete_{task_id}"):
+                cursor.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+                conn.commit()
+                st.experimental_rerun()
+    else:
+        st.write("Henüz görev eklenmedi!")
 
-st.dataframe(df)
-
-# 📈 **Çalışma Saatleri Grafiği**
-st.subheader("📉 Haftalık Çalışma Saati Grafiği")
-st.line_chart(df.set_index("Tarih"))
-
-# 📌 Motivasyon Notu
-st.sidebar.header("💡 Motivasyon Notu")
-motivation_quotes = [
-    "Başlamak için mükemmel olmak zorunda değilsin, ama mükemmel olmak için başlamalısın.",
-    "Bugün yapabileceklerini yarına bırakma!",
-    "Başarı, tekrar tekrar denemekten geçer."
-]
-st.sidebar.write(random.choice(motivation_quotes))
-
-# 🎉 Bitti!
-st.write("🚀 Verimli bir gün geçir! 💪")
+    # 📌 Yeni Görev Ekleme
+    new_task = st.text_input("Yeni görev ekle:")
+    if st.button("Ekle"):
+        cursor.execute("INSERT INTO tasks (user, task) VALUES (?, ?)", (selected_user, new_task))
+        conn.commit()
+        st.success(f"📝 Yeni görev eklendi: {new_task}")
+        st.experimental_rerun()
